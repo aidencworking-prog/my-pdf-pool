@@ -2,17 +2,18 @@
 import asyncio
 import re
 import sys
+import importlib
 from datetime import datetime
 from urllib.parse import urlparse
 import streamlit as st
 
-# Force Streamlit to install playwright inside the Python loop dynamically if missing
-# 用最安全、不觸發權限阻擋的方式在執行期動態補裝套件
+# Secure internal loop installation / 內部安全動態下載
 try:
     from playwright.async_api import async_playwright
 except ModuleNotFoundError:
     import pip
     pip.main(["install", "playwright"])
+    importlib.invalidate_caches()  # Fix: Force Python to reload new packages / 修正：強制刷新快取
     from playwright.async_api import async_playwright
 
 def url_to_filename(url: str) -> str:
@@ -37,7 +38,6 @@ if user_url:
             
             async def capture_pdf(target_url):
                 async with async_playwright() as p:
-                    # Headless launch / 以無頭瀏覽器模式啟動
                     browser = await p.chromium.launch(headless=True)
                     page = await browser.new_page()
                     await page.goto(target_url, wait_until="networkidle", timeout=30000)
@@ -62,8 +62,7 @@ if user_url:
                     mime="application/pdf"
                 )
             except Exception as e:
-                # Automate the system core binary if the browser framework is empty
-                # 如果是缺少瀏覽器本體，則在畫面上提示並自動幫忙修復核心
+                # Automatic browser backend setup if missing / 遺失核心瀏覽器時自動背景下載
                 if "Executable doesn't exist" in str(e) or "playwright install" in str(e).lower():
                     st.info("🔧 Setting up browser engine for the first time... Re-clicking in 10s! / 正在初始化雲端瀏覽器核心，請在十秒後重新點擊轉換！")
                     try:
