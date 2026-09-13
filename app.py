@@ -1,11 +1,10 @@
-import subprocess
-import sys
 
-try:
-    import playwright
-except ModuleNotFoundError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "playwright", "streamlit"])
-    subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"])
+import asyncio
+import re
+from datetime import datetime
+from urllib.parse import urlparse
+import streamlit as st
+from playwright.async_api import async_playwright
 
 import asyncio
 import re
