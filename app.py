@@ -1,10 +1,20 @@
 # app.py
+import asyncio
 import re
-import html
+import sys
+import importlib
 from datetime import datetime
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 import streamlit as st
+
+# Secure internal loop installation / 確保 Playwright 在雲端被正確載入
+try:
+    from playwright.async_api import async_playwright
+except ModuleNotFoundError:
+    import pip
+    pip.main(["install", "playwright"])
+    importlib.invalidate_caches()
+    from playwright.async_api import async_playwright
 
 def url_to_filename(url: str) -> str:
     parsed = urlparse(url)
@@ -13,89 +23,9 @@ def url_to_filename(url: str) -> str:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"{name}_{timestamp}.pdf"
 
-def clean_html_to_text(html_content: str) -> str:
-    # Remove script and style tags / 移除文字外的網頁腳本與樣式
-    html_content = re.sub(r'<script.*?>.*?</script>', '', html_content, flags=re.DOTALL)
-    html_content = re.sub(r'<style.*?>.*?</style>', '', html_content, flags=re.DOTALL)
-    # Strip basic HTML tags / 移除所有 HTML 標籤
-    text = re.sub(r'<[^>]+>', ' ', html_content)
-    # Decode HTML characters (e.g. &amp; to &) / 解碼網頁特殊字元
-    text = html.unescape(text)
-    # Standardize spaces / 整理空白字元
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
-
-def create_pure_pdf(source_url: str, content_text: str) -> bytes:
-    """Generates a valid, minimal text-based PDF using pure Python built-ins."""
-    # Split text into manageable line paragraphs / 將文字切成段落行
-    words = content_text[:30000].split(' ')
-    lines = []
-    current_line = []
-    
-    for word in words:
-        current_line.append(word)
-        if len(' '.join(current_line)) > 85: # Approximate character width / 約略字元寬度折行
-            lines.append(' '.join(current_line))
-            current_line = []
-    if current_line:
-        lines.append(' '.join(current_line))
-
-    # Constructing a valid PDF structural tree / 建立符合標準格式的最小 PDF 檔案結構
-    pdf_lines = [
-        b"%PDF-1.4",
-        b"1 0 obj",
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"endobj",
-        b"2 0 obj",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"endobj",
-        b"3 0 obj",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-        b"endobj"
-    ]
-    
-    # Generate content stream with text layout / 生成帶有文字排版的內容流
-    stream_content = [
-        b"BT",
-        b"/F1 10 Tf",
-        b"14 TL",
-        b"50 800 Td",
-        f"({source_url.encode('latin1', 'ignore').decode('latin1')}) Tj T*".encode('latin1'),
-        b"T*",
-    ]
-    
-    for line in lines[:50]: # Limit to first page for safety / 限制在一頁的安全範圍內
-        # Strip out any non-pdf standard characters safely
-        clean_line = line.encode('latin1', 'ignore').decode('latin1').replace('(', '\\(').replace(')', '\\)')
-        stream_content.append(f"({clean_line}) Tj T*".encode('latin1'))
-        
-    stream_content.append(b"ET")
-    stream_binary = b"\n".join(stream_content)
-    
-    pdf_lines.extend([
-        b"4 0 obj",
-        f"<< /Length {len(stream_binary)} >>".encode('latin1'),
-        b"stream",
-        stream_binary,
-        b"endstream",
-        b"endobj",
-        b"5 0 obj",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"endobj",
-        b"xref",
-        b"0 6",
-        b"0000000000 65535 f ",
-        b"trailer",
-        b"<< /Size 6 /Root 1 0 R >>",
-        b"%%EOF"
-    ])
-    
-    return b"\n".join(pdf_lines)
-
-# Web Layout Setup / 網頁前端佈局
 st.set_page_config(page_title="Web to PDF", page_icon="🌐")
-st.title("🌐 Web to PDF Light / 網頁轉 PDF 輕量版")
-st.write("Convert any article into a standard text PDF instantly. / 將網頁文章立即轉為標準文字 PDF 檔案。")
+st.title("🌐 Web to PDF Converter / 網頁轉 PDF 工具")
+st.write("Convert any complex webpage into a clean A4 PDF file. / 將任何複雜網頁轉換為 A4 PDF 檔案。")
 
 user_url = st.text_input("Enter URL / 輸入網頁網址:", placeholder="https://example.com")
 
@@ -104,25 +34,51 @@ if user_url:
         user_url = "https://" + user_url
 
     if st.button("Convert to PDF / 開始轉換", type="primary"):
-        with st.spinner("Extracting text data... / 正在擷取資料中..."):
+        with st.spinner("Launching cloud browser engine... Please wait / 正在啟動雲端瀏覽器核心，請稍候..."):
+            
+            async def capture_pdf(target_url):
+                async with async_playwright() as p:
+                    # Launch a real virtual browser / 啟動真實虛擬瀏覽器防止被網站封鎖
+                    browser = await p.chromium.launch(headless=True)
+                    page = await browser.new_page()
+                    
+                    # Mimic a real human browser agent / 模擬真人瀏覽器標頭
+                    await page.set_extra_http_headers({
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    })
+                    
+                    await page.goto(target_url, wait_until="networkidle", timeout=30000)
+                    await page.wait_for_timeout(1000)
+                    
+                    pdf_data = await page.pdf(
+                        format="A4",
+                        print_background=True,
+                        margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"},
+                    )
+                    await browser.close()
+                    return pdf_data
+
             try:
-                # Pure Python network request / 使用內建的 urllib 模組抓取網頁
-                req = Request(user_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urlopen(req, timeout=10) as response:
-                    raw_html = response.read().decode('utf-8', errors='ignore')
-                
-                plain_text = clean_html_to_text(raw_html)
+                pdf_bytes = asyncio.run(capture_pdf(user_url))
                 filename = url_to_filename(user_url)
                 
-                # Pure Python PDF constructor / 使用純內建二進位排版技術
-                pdf_data = create_pure_pdf(user_url, plain_text)
-
                 st.success("🎉 Conversion Successful! / 轉換成功！")
                 st.download_button(
                     label="📥 Download PDF / 下載 PDF 檔案",
-                    data=pdf_data,
+                    data=pdf_bytes,
                     file_name=filename,
                     mime="application/pdf"
                 )
             except Exception as e:
-                st.error(f"❌ Error / 發生錯誤: {e}")
+                # Automate browser download if the operating system lacks the chromium binary
+                # 如果 Linux 系統缺少瀏覽器本體，會自動執行背景補包下載，並提示使用者再點一次
+                if "executable doesn't exist" in str(e).lower() or "playwright install" in str(e).lower():
+                    st.info("🔧 Initializing browser environment... Please wait 10 seconds and click 'Convert' again! / 正在初始化雲端瀏覽器環境，請稍候 10 秒並重新點擊轉換！")
+                    try:
+                        import subprocess
+                        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"])
+                    except:
+                        pass
+                else:
+                    st.error(f"❌ Error / 發生錯誤: {e}")
+
