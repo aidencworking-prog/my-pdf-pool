@@ -171,7 +171,6 @@ if user_url:
                 else:
                     filename = f"{file_base}.txt"
                     text_lines = [f"TITLE: {page_title}", f"SOURCE: {user_url}", f"TIMESTAMP: {datetime.now()}\n", "="*50, ""]
-                    text_lines.append("[ AI EXECUTIVE BRIEF BRIEFING SUMMARY]")
                     for b in ai_summary_points:
                         text_lines.append(f"- {b}")
                     text_lines.append("="*50 + "\n")
