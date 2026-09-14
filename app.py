@@ -14,13 +14,13 @@ def url_to_filename(title: str, url: str) -> str:
     return f"{clean_name.strip('_')[:50]}_{timestamp}"
 
 def clean_html_smart(html_content: str):
-    """Native Smart Parser: Extracts title and structured paragraphs while stripping Wikipedia numbers."""
+    """Native Smart Parser: Extracts title and structured paragraphs while stripping Wikipedia numbers completely."""
     # 1. Extract Title safely
     title_match = re.search(r'<title.*?>(.*?)</title>', html_content, re.IGNORECASE | re.DOTALL)
     page_title = title_match.group(1).strip() if title_match else "Web Article Intelligence"
     page_title = html.unescape(page_title)
     
-    # Remove "- Wikipedia" or similar text from the title block if present
+    # Strip "- Wikipedia" suffix from title block / 移除標題結尾的維基百科字樣
     page_title = re.sub(r'\s*-\s*Wikipedia.*', '', page_title, flags=re.IGNORECASE)
     
     # 2. Erase scripts, codes, style formatting, and nav structures
@@ -29,8 +29,11 @@ def clean_html_smart(html_content: str):
     html_content = re.sub(r'<nav.*?>.*?</nav>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
     html_content = re.sub(r'<footer.*?>.*?</footer>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
     
-    # 🌟 NEW ADDITION: Strip Wikipedia citation brackets like, [2], [10], etc.
-    # 🌟 新增功能：自動移除維基百科的註腳標籤（如, [2], [12] 等）
+    # 🌟 ULTIMATE FIX: Strip reference tags (like <sup id="cite_ref...">[1]</sup>) completely from the core HTML
+    # 🌟 終極修復：直接從 HTML 原始碼中將整組參照標籤（連同裡面的括號與數字）完全抹除
+    html_content = re.sub(r'<sup\b[^>]*>.*?</sup>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Backup check: Clean up any rogue text-only brackets left over / 備用清理：清除可能殘留的純文字方括號
     html_content = re.sub(r'\[\d+\]', '', html_content)
     
     # 3. Split content into logical clean text blocks
@@ -38,16 +41,19 @@ def clean_html_smart(html_content: str):
     
     paragraphs = []
     for block in raw_blocks:
-        # Strip all inline sub-tags (like <a>, <span>, <strong>)
+        # Strip all remaining inline sub-tags (like <a>, <span>, <strong>)
         clean_block = re.sub(r'<[^>]+>', ' ', block)
         clean_block = html.unescape(clean_block)
         clean_block = re.sub(r'\s+', ' ', clean_block).strip()
         
         # Filter out layout junk, navigation labels, and noise links
         if len(clean_block) > 25 and not clean_block.startswith(("http", "javascript", "{", "/*", "^")):
+            # Extra cleanup for Wikipedia specific edit buttons text / 順手清除維基百科常見的「編輯」按鈕殘留字樣
+            clean_block = re.sub(r'\s*\[\s*edit\s*\]', '', clean_block, flags=re.IGNORECASE)
             paragraphs.append(clean_block)
             
     return page_title, paragraphs
+
 
 def create_native_pdf(title: str, source_url: str, paragraphs: list, font_size: int, show_summary: bool) -> bytes:
     """Ultra-Advanced PDF Matrix built entirely using 100% pure native Python binary wrappers."""
