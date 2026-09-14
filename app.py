@@ -14,17 +14,24 @@ def url_to_filename(title: str, url: str) -> str:
     return f"{clean_name.strip('_')[:50]}_{timestamp}"
 
 def clean_html_smart(html_content: str):
-    """Native Smart Parser: Extracts title and structured paragraphs without BeautifulSoup."""
+    """Native Smart Parser: Extracts title and structured paragraphs while stripping Wikipedia numbers."""
     # 1. Extract Title safely
     title_match = re.search(r'<title.*?>(.*?)</title>', html_content, re.IGNORECASE | re.DOTALL)
     page_title = title_match.group(1).strip() if title_match else "Web Article Intelligence"
     page_title = html.unescape(page_title)
+    
+    # Remove "- Wikipedia" or similar text from the title block if present
+    page_title = re.sub(r'\s*-\s*Wikipedia.*', '', page_title, flags=re.IGNORECASE)
     
     # 2. Erase scripts, codes, style formatting, and nav structures
     html_content = re.sub(r'<script.*?>.*?</script>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
     html_content = re.sub(r'<style.*?>.*?</style>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
     html_content = re.sub(r'<nav.*?>.*?</nav>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
     html_content = re.sub(r'<footer.*?>.*?</footer>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+    
+    # 🌟 NEW ADDITION: Strip Wikipedia citation brackets like, [2], [10], etc.
+    # 🌟 新增功能：自動移除維基百科的註腳標籤（如, [2], [12] 等）
+    html_content = re.sub(r'\[\d+\]', '', html_content)
     
     # 3. Split content into logical clean text blocks
     raw_blocks = re.split(r'</?(?:p|h1|h2|h3|li|div|article|section)>', html_content, flags=re.IGNORECASE)
@@ -36,8 +43,8 @@ def clean_html_smart(html_content: str):
         clean_block = html.unescape(clean_block)
         clean_block = re.sub(r'\s+', ' ', clean_block).strip()
         
-        # Filter out layout junk and noise links
-        if len(clean_block) > 25 and not clean_block.startswith(("http", "javascript", "{", "/*")):
+        # Filter out layout junk, navigation labels, and noise links
+        if len(clean_block) > 25 and not clean_block.startswith(("http", "javascript", "{", "/*", "^")):
             paragraphs.append(clean_block)
             
     return page_title, paragraphs
