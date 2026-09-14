@@ -185,8 +185,16 @@ if user_url:
                 else:
                     filename = f"{file_base}.txt"
                     text_lines = [f"TITLE: {page_title}", f"SOURCE: {user_url}", f"TIMESTAMP: {datetime.now()}\n", "="*50, ""]
+                                  # --- PROCESS DOWNSTREAM EXPORTS ---
+                if "PDF" in export_format:
+                    filename = f"{file_base}.pdf"
+                    file_bytes = create_native_pdf(page_title, user_url, clean_paragraphs, ui_font_size, ui_enable_summary, ai_summary_points)
+                    mime_type = "application/pdf"
+                else:
+                    filename = f"{file_base}.txt"
+                    text_lines = [f"TITLE: {page_title}", f"SOURCE: {user_url}", f"TIMESTAMP: {datetime.now()}\n", "="*50, ""]
                     if ui_enable_summary:
-                        text_lines.append("[🤖 AI EXECUTIVE BRIEF BRIEFING SUMMARY]")
+                        text_lines.append("[ AI EXECUTIVE BRIEF BRIEFING SUMMARY]")
                         for b in ai_summary_points:
                             text_lines.append(f"- {b}")
                         text_lines.append("="*50 + "\n")
@@ -194,6 +202,12 @@ if user_url:
                     file_bytes = "\n".join(text_lines).encode('utf-8', errors='ignore')
                     mime_type = "text/plain"
 
-                st.success("🎉 AI Analysis Complete! Your download is packaged and ready.")
+                st.success(" AI Analysis Complete! Your download is packaged and ready.")
                 st.download_button(
-                    label=f"📥 Download Processed {filename.split('.')[-1].upper()} Brief",
+                    label=f" Download Processed {filename.split('.')[-1].upper()} Brief",
+                    data=file_bytes,
+                    file_name=filename,
+                    mime=mime_type
+                )
+            except Exception as e:
+                st.error(f" Core Processing Matrix Exception: {e}")
