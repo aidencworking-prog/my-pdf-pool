@@ -1,4 +1,3 @@
-# app.py
 import re
 import html
 from datetime import datetime
@@ -14,7 +13,6 @@ def url_to_filename(title: str, url: str) -> str:
     return f"{clean_name.strip('_')[:50]}_{timestamp}"
 
 def clean_html_smart(html_content: str):
-    """Native Smart Parser: Extracts title and structured paragraphs while stripping Wikipedia numbers completely."""
     title_match = re.search(r'<title.*?>(.*?)</title>', html_content, re.IGNORECASE | re.DOTALL)
     page_title = title_match.group(1).strip() if title_match else "Web Article Intelligence"
     page_title = html.unescape(page_title)
@@ -43,12 +41,10 @@ def clean_html_smart(html_content: str):
     return page_title, paragraphs
 
 def generate_ai_summary(paragraphs: list, sentences_count: int = 3) -> list:
-    """Built-in Natural Language Extraction: Automatically summarizes the article using term weight ranking."""
     all_text = " ".join(paragraphs).lower()
-    
     words = re.findall(r'\b\w{4,15}\b', all_text)
     if not words:
-        return ["Insufficient text data to calculate structural context."]
+        return ["Insufficient text data to calculate structural summary context."]
         
     word_frequencies = {}
     for word in words:
@@ -73,11 +69,9 @@ def generate_ai_summary(paragraphs: list, sentences_count: int = 3) -> list:
                 
     ranked_sentences = sorted(sentence_scores, key=sentence_scores.get, reverse=True)
     summary_bullets = ranked_sentences[:sentences_count]
-    
-    return summary_bullets if summary_bullets else ["Could not isolate contextual analytical vectors."]
+    return summary_bullets if summary_bullets else ["Could not isolate main summary vectors."]
 
 def create_native_pdf(title: str, source_url: str, paragraphs: list, font_size: int, ai_bullets: list) -> bytes:
-    """PDF Matrix: Packs structural article content and AI summary blocks dynamically."""
     max_char_width = 90 if font_size < 11 else (75 if font_size < 14 else 60)
     line_spacing = font_size + 4
     lines = []
@@ -150,7 +144,7 @@ if user_url:
         user_url = "https://" + user_url
 
     if st.button("🚀 Process & Summarize Content", type="primary"):
-        with st.spinner("⚡ AI Core Processing: Fetching layout payload and running matrix analytics..."):
+        with st.spinner("⚡ AI Core Processing: Fetching layout payload and running analytics..."):
             try:
                 req = Request(user_url, headers={'User-Agent': 'Mozilla/5.0'})
                 with urlopen(req, timeout=15) as response:
@@ -164,7 +158,7 @@ if user_url:
                 
                 ai_summary_points = generate_ai_summary(clean_paragraphs, 3)
                 
-                if "PDF" in export_format:
+                if "pdf" in export_format.lower():
                     filename = f"{file_base}.pdf"
                     file_bytes = create_native_pdf(page_title, user_url, clean_paragraphs, ui_font_size, ai_summary_points)
                     mime_type = "application/pdf"
